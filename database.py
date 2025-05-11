@@ -4,10 +4,13 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 Base = declarative_base()  # Keep only one instance
 
 # Database URL
-DATABASE_URL = "postgresql+psycopg2://pothole_user:rono@localhost/pothole_db"
+import os
+
+SQLALCHEMY_DATABASE_URI = os.environ['DATABASE_URL']
+
 
 # Create database engine
-engine = create_engine(DATABASE_URL)
+engine = create_engine(os.environ['DATABASE_URL'])
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 class Pothole(Base):
