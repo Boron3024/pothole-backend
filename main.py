@@ -225,8 +225,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://http://aipotholedetection.fwh.is/"], 
     allow_credentials=True,
-    allow_methods=["https://http://aipotholedetection.fwh.is/"],
-    allow_headers=["https://http://aipotholedetection.fwh.is/"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 @app.get("/")
 def root():
