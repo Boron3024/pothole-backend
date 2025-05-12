@@ -7,72 +7,37 @@ import shutil
 from PIL import Image
 from PIL.ExifTags import TAGS, GPSTAGS
 from datetime import datetime
-from fastapi import FastAPI, Depends, File, UploadFile
+from typing import List
+
+from fastapi import FastAPI, Depends, File, UploadFile, HTTPException
 from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
-from database import SessionLocal, Pothole
-from ultralytics import YOLO
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi import UploadFile, File
-from fastapi import HTTPException
-from typing import List
-from fastapi import APIRouter, HTTPException
+from sqlalchemy.orm import Session
+from ultralytics import YOLO
+
+from database import SessionLocal, Pothole
+
 import zipfile
 
 app = FastAPI()
 
+# Mount static file directories
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+app.mount("/results", StaticFiles(directory="results"), name="results")
 
-@app.get("/snapshots/zip")
-def download_all_snapshots():
-    from fastapi.responses import FileResponse
-    from fastapi import HTTPException
-    import zipfile
-    import os
-    from datetime import datetime
-
-    SNAPSHOT_DIR = "snapshots"
-    ZIP_DIR = "zips"
-    os.makedirs(ZIP_DIR, exist_ok=True)
-
-    if not os.path.exists(SNAPSHOT_DIR):
-        raise HTTPException(status_code=404, detail="Snapshot directory does not exist")
-
-    zip_filename = f"snapshots_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
-    zip_path = os.path.join(ZIP_DIR, zip_filename)
-
-    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        for file in os.listdir(SNAPSHOT_DIR):
-            file_path = os.path.join(SNAPSHOT_DIR, file)
-            if os.path.isfile(file_path):
-                zipf.write(file_path, arcname=file)
-
-    return FileResponse(path=zip_path, filename=zip_filename, media_type="application/zip")
-
-# Ensure this directory exists
+# Ensure directories exist
 SNAPSHOT_DIR = "snapshots"
-os.makedirs(SNAPSHOT_DIR, exist_ok=True)
-
-@app.post("/save_snapshot/")
-async def save_snapshot(image: UploadFile = File(...)):
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"snapshot_{timestamp}_{image.filename}"
-    save_path = os.path.join(SNAPSHOT_DIR, filename)
-
-    with open(save_path, "wb") as f:
-        content = await image.read()
-        f.write(content)
-
-    return {"message": "Snapshot saved", "file_path": save_path}
-
-model = YOLO("best.pt")
-
 UPLOAD_DIR = "uploads"
 RESULTS_DIR = "results"
+ZIP_DIR = "zips"
+
+os.makedirs(SNAPSHOT_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(RESULTS_DIR, exist_ok=True)
+os.makedirs(ZIP_DIR, exist_ok=True)
 
+model = YOLO("best.pt")
 PIXEL_TO_M2 = 0.00000007  # 1 pixel² = 0.00000007 m²
 PIXEL_TO_MM = 0.265       # 1 pixel = 0.265 mm
 
@@ -85,16 +50,14 @@ def get_gps_coordinates(image_path):
         img = Image.open(image_path)
         exif_data = img._getexif()
         if exif_data:
-            gps_info = None
-            for tag, value in exif_data.items():
-                tag_name = TAGS.get(tag, tag)
-                if tag_name == "GPSInfo":
-                    gps_info = {GPSTAGS.get(t, t): v for t, v in value.items()}
+            gps_info = {TAGS.get(tag): value for tag, value in exif_data.items() if TAGS.get(tag) == "GPSInfo"}
             if gps_info:
-                lat = gps_info.get("GPSLatitude")
-                lat_ref = gps_info.get("GPSLatitudeRef")
-                lon = gps_info.get("GPSLongitude")
-                lon_ref = gps_info.get("GPSLongitudeRef")
+                gps_data = gps_info["GPSInfo"]
+                gps_data = {GPSTAGS.get(t): v for t, v in gps_data.items()}
+                lat = gps_data.get("GPSLatitude")
+                lat_ref = gps_data.get("GPSLatitudeRef")
+                lon = gps_data.get("GPSLongitude")
+                lon_ref = gps_data.get("GPSLongitudeRef")
                 if lat and lon and lat_ref and lon_ref:
                     latitude = convert_to_degrees(lat)
                     longitude = convert_to_degrees(lon)
@@ -134,6 +97,44 @@ def get_db():
 @app.get("/")
 def root():
     return {"message": "Pothole Detection API is running!"}
+
+@app.post("/save_snapshot/")
+async def save_snapshot(image: UploadFile = File(...)):
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"snapshot_{timestamp}_{image.filename}"
+    save_path = os.path.join(SNAPSHOT_DIR, filename)
+    with open(save_path, "wb") as f:
+        content = await image.read()
+        f.write(content)
+    return {"message": "Snapshot saved", "file_path": save_path}
+
+@app.get("/snapshots/")
+def list_snapshots() -> List[str]:
+    try:
+        files = os.listdir(SNAPSHOT_DIR)
+        return sorted(files)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Snapshot directory not found")
+
+@app.get("/snapshots/{filename}")
+def get_snapshot(filename: str):
+    file_path = os.path.join(SNAPSHOT_DIR, filename)
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    return FileResponse(file_path)
+
+@app.get("/snapshots/zip")
+def download_all_snapshots():
+    if not os.path.exists(SNAPSHOT_DIR):
+        raise HTTPException(status_code=404, detail="Snapshot directory does not exist")
+    zip_filename = f"snapshots_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+    zip_path = os.path.join(ZIP_DIR, zip_filename)
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for file in os.listdir(SNAPSHOT_DIR):
+            file_path = os.path.join(SNAPSHOT_DIR, file)
+            if os.path.isfile(file_path):
+                zipf.write(file_path, arcname=file)
+    return FileResponse(path=zip_path, filename=zip_filename, media_type="application/zip")
 
 @app.post("/detect_pothole/")
 async def detect_pothole(image: UploadFile = File(...), db: Session = Depends(get_db)):
@@ -180,12 +181,14 @@ async def detect_pothole(image: UploadFile = File(...), db: Session = Depends(ge
                 cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
                 cv2.putText(img, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-                new_pothole = Pothole(latitude=gps_lat or 0.0,
-                                      longitude=gps_lon or 0.0,
-                                      severity=severity_class,
-                                      area_m2=area_m2,
-                                      volume_m3=volume_m3,
-                                      image_path=detected_image_path)
+                new_pothole = Pothole(
+                    latitude=gps_lat or 0.0,
+                    longitude=gps_lon or 0.0,
+                    severity=severity_class,
+                    area_m2=area_m2,
+                    volume_m3=volume_m3,
+                    image_path=detected_image_path
+                )
                 db.add(new_pothole)
 
                 potholes_detected.append({
@@ -202,7 +205,6 @@ async def detect_pothole(image: UploadFile = File(...), db: Session = Depends(ge
     db.commit()
     cv2.imwrite(detected_image_path, img)
 
-    # Create Excel Report
     report_filename = f"report_{image.filename.split('.')[0]}.xlsx"
     report_path = os.path.join(RESULTS_DIR, report_filename)
     pd.DataFrame(potholes_detected).to_excel(report_path, index=False)
@@ -217,25 +219,14 @@ async def detect_pothole(image: UploadFile = File(...), db: Session = Depends(ge
 def download_excel(filename: str):
     excel_file_path = os.path.join(RESULTS_DIR, filename)
     if os.path.exists(excel_file_path):
-        return FileResponse(excel_file_path, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        return FileResponse(
+            excel_file_path,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
     return {"error": "Excel file not found"}
 
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["https://http://aipotholedetection.fwh.is/"], 
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-@app.get("/")
-def root():
-    return {"message": "Backend is working!"}
-
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-@app.get("/download_excel/")
-def download_excel(db: Session = Depends(get_db)):
+@app.get("/download_excel_from_db/")
+def download_excel_from_db(db: Session = Depends(get_db)):
     potholes = db.query(Pothole).all()
     data = [
         {
@@ -259,14 +250,9 @@ def download_excel(db: Session = Depends(get_db)):
 
 @app.get("/export_excel/")
 def export_excel(db: Session = Depends(get_db)):
-    from pandas import DataFrame
-    import pandas as pd
-
     potholes = db.query(Pothole).all()
-
     if not potholes:
         return {"message": "No data to export"}
-
     data = [
         {
             "ID": p.id,
@@ -280,30 +266,25 @@ def export_excel(db: Session = Depends(get_db)):
         }
         for p in potholes
     ]
-
     df = pd.DataFrame(data)
     filename = "pothole_report.xlsx"
-    filepath = os.path.join("results", filename)
-    os.makedirs("results", exist_ok=True)
+    filepath = os.path.join(RESULTS_DIR, filename)
     df.to_excel(filepath, index=False)
-
     return FileResponse(
         filepath,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename=filename
     )
 
-@app.get("/snapshots/")
-def list_snapshots() -> List[str]:
-    try:
-        files = os.listdir("snapshots")
-        return sorted(files)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Snapshot directory not found")
+# CORS settings
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://aipotholedetection.fwh.is/"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.get("/snapshots/{filename}")
-def get_snapshot(filename: str):
-    file_path = os.path.join("snapshots", filename)
-    if not os.path.isfile(file_path):
-        raise HTTPException(status_code=404, detail="Snapshot not found")
-    return FileResponse(file_path)
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
