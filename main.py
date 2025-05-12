@@ -223,10 +223,10 @@ def download_excel(filename: str):
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"], 
+    allow_origins=["https://http://aipotholedetection.fwh.is/"], 
     allow_credentials=True,
-    allow_methods=["http://localhost:3000"],
-    allow_headers=["http://localhost:3000"],
+    allow_methods=["https://http://aipotholedetection.fwh.is/"],
+    allow_headers=["https://http://aipotholedetection.fwh.is/"],
 )
 @app.get("/")
 def root():
