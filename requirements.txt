@@ -38,14 +38,12 @@ nvidia-nccl-cu12==2.21.5
 nvidia-nvjitlink-cu12==12.4.127
 nvidia-nvtx-cu12==12.4.127
 omegaconf==2.3.0
-opencv-python==4.11.0.86
 opencv-python-headless==4.11.0.86
 openpyxl==3.1.5
 packaging==24.2
 pandas==2.2.3
 pillow==11.1.0
 psutil==7.0.0
-psycopg2==2.9.10
 psycopg2-binary==2.9.10
 py-cpuinfo==9.0.0
 pydantic==2.10.6
