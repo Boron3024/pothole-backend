@@ -1,24 +1,25 @@
-# Use official PyTorch CPU-only base image
-FROM pytorch/pytorch:2.0.1-cpu
+FROM python:3.10-slim
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system packages
 RUN apt-get update && apt-get install -y \
     libgl1 \
     libglib2.0-0 \
-    && rm -rf /var/lib/apt/lists/*
+    ffmpeg \
+    git \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Copy project files
 COPY . .
 
-# Install Python packages
+# Install Python dependencies
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose FastAPI port
+# Expose port for FastAPI
 EXPOSE 8000
 
-# Run the app
+# Run FastAPI
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
