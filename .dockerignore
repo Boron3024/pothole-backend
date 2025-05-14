@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+venv/
+uploads/
+results/
+snapshots/
+*.db
+*.sqlite3
+*.pt
+.git
