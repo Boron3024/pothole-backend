@@ -1,16 +1,14 @@
+import os
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, func
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-Base = declarative_base()  # Keep only one instance
+Base = declarative_base()
 
-# Database URL
-import os
-
-SQLALCHEMY_DATABASE_URI = os.environ['DATABASE_URL']
-
+# Use .get() to prevent crash if env var is missing (or set a fallback)
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./test.db")
 
 # Create database engine
-engine = create_engine(os.environ['DATABASE_URL'])
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 class Pothole(Base):
@@ -23,6 +21,7 @@ class Pothole(Base):
     area_m2 = Column(Float, nullable=False)
     volume_m3 = Column(Float, nullable=True)
     image_path = Column(String, nullable=True)
-    timestamp = Column(DateTime, default=func.now())  # Auto timestamp
+    timestamp = Column(DateTime, default=func.now())
+
 # Create tables
 Base.metadata.create_all(bind=engine)
