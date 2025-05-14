@@ -1,5 +1,5 @@
 # Use PyTorch with CUDA support (change to CPU-only if needed)
-FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+FROM pytorch/pytorch:2.1.0-cpu
 
 # Set working directory
 WORKDIR /app
