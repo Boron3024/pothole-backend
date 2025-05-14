@@ -1,25 +1,25 @@
-# Use PyTorch with CUDA support (change to CPU-only if needed)
+# Use PyTorch with CPU support (change to CUDA if needed)
 FROM pytorch/pytorch:2.1.0-cpu
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies and Python packages in one layer to minimize image size
 RUN apt-get update && apt-get install -y \
     libgl1 \
     libglib2.0-0 \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
 
-# Copy requirements and install
+# Copy the requirements.txt first to leverage Docker cache
 COPY requirements.txt .
-RUN pip install --upgrade pip
-RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy app code
+# Copy the rest of the app code
 COPY . .
 
-# Expose port
+# Expose the port the app will run on
 EXPOSE 8000
 
-# Run app
+# Run FastAPI app using Uvicorn
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
