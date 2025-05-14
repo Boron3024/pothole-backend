@@ -1,5 +1,5 @@
-# Use CPU-only PyTorch base image (small and compatible)
-FROM pytorch/pytorch:2.1.0
+# Use official PyTorch CPU-only base image
+FROM pytorch/pytorch:2.0.1-cpu
 
 # Set working directory
 WORKDIR /app
